@@ -1,8 +1,10 @@
-**/__pycache__
+**/__pycache__/
 
-**/output_*
+**/output_*/
 
-**/.vscode
+**/.vscode/
+
+**/grid_search_*/
 
 /comp_predict_table.csv
 /date_label.csv
