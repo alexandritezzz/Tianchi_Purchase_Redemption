@@ -2,12 +2,14 @@
 
 1. 数据集：天池比赛-Purchase Redemption
 
-2. 拉取仓库后需解压 `Purchase Redemption.zip` 并将其中的文件放到根目录（原因是一个csv超过100MB，无法直接上传到Github）
+2. 拉取仓库后需解压 `Purchase Redemption Data.zip` 并将其中的文件全部放到根目录（需要这一步额外操作的原因是，一个csv超过100MB，无法直接上传到Github）
 
 3. 赛事要求和笔记：`天池.md` 
 
 # 安装依赖
 
+- Python 版本：3.12
+- 安装所需的包：
 ```bash
 pip install -r requirements.txt
 ```
