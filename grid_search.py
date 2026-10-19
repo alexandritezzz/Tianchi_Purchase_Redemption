@@ -1,4 +1,5 @@
 """按时间顺序回测的网格调参：python grid_search.py。"""
+
 import argparse
 from datetime import datetime
 from itertools import product
@@ -7,7 +8,6 @@ from pathlib import Path
 import pandas as pd
 from data_processing import DATA_DIR, TRAIN_END, load_daily_data, make_training_samples
 from forecast import BACKTEST_ORIGINS, MODEL_PARAMS, run_backtests
-
 
 # 修改候选列表即可调整默认搜索范围；所有组合使用相同的月度回测窗口。
 PARAM_GRID = {
@@ -78,12 +78,14 @@ def main():
         baseline = metrics.loc[
             metrics["model"] == "weekday_baseline", "weighted_mape_proxy"
         ].mean()
-        results.append({
-            "trial": trial,
-            **params,
-            **scores.to_dict(),
-            "baseline_weighted_mape_proxy": baseline,
-        })
+        results.append(
+            {
+                "trial": trial,
+                **params,
+                **scores.to_dict(),
+                "baseline_weighted_mape_proxy": baseline,
+            }
+        )
         # 每轮保存，长任务中断后仍可查看已完成的结果。
         summary = pd.DataFrame(results).sort_values(
             ["weighted_mape_proxy", "trial"], kind="stable"

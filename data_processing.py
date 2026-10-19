@@ -1,10 +1,9 @@
 """Data loading, validation, feature engineering and training samples."""
-from pathlib import Path
 
+from pathlib import Path
 import numpy as np
 import pandas as pd
 from chinese_calendar import is_workday
-
 
 DATA_DIR = Path(".")
 TRAIN_END = pd.Timestamp("2014-08-31")
@@ -20,9 +19,12 @@ def parse_dates(series):
     compact = text.str.fullmatch(r"\d{8}")
 
     result = pd.Series(pd.NaT, index=series.index, dtype="datetime64[ns]")
-    result.loc[compact] = pd.to_datetime(text.loc[compact], format="%Y%m%d", errors="raise")
+    result.loc[compact] = pd.to_datetime(
+        text.loc[compact], format="%Y%m%d", errors="raise"
+    )
     result.loc[~compact] = pd.to_datetime(text.loc[~compact], errors="raise")
     return result
+
 
 def load_daily_data(data_dir=DATA_DIR, train_end=TRAIN_END):
     """Load and validate daily data up to train_end."""
@@ -76,23 +78,30 @@ def load_daily_data(data_dir=DATA_DIR, train_end=TRAIN_END):
     expected_index = pd.date_range(daily.index.min(), train_end, freq="D")
     missing_dates = expected_index.difference(daily.index)
     if len(missing_dates):
-        raise ValueError("缺少整天数据，不能直接当成零："
-                        + ", ".join(d.strftime("%Y%m%d") for d in missing_dates))
+        raise ValueError(
+            "缺少整天数据，不能直接当成零："
+            + ", ".join(d.strftime("%Y%m%d") for d in missing_dates)
+        )
 
     daily = daily.reindex(expected_index)
     daily.index.name = "report_date"
 
     # 申购包含收益：这里只校验，不再追加收益。
     purchase_diff = (
-        daily["purchase"]
-        - daily["direct_purchase"]
-        - daily["share"]
+        daily["purchase"] - daily["direct_purchase"] - daily["share"]
     ).abs()
     if purchase_diff.max() > 0:
         print("警告：部分日期的总申购不等于直接申购加收益，请核对。")
 
-    daily = join_rate_table(daily, data_dir / "mfd_day_share_interest.csv", prefix="yield", train_end=train_end)
-    daily = join_rate_table(daily, data_dir / "mfd_bank_shibor.csv", prefix="shibor", train_end=train_end)
+    daily = join_rate_table(
+        daily,
+        data_dir / "mfd_day_share_interest.csv",
+        prefix="yield",
+        train_end=train_end,
+    )
+    daily = join_rate_table(
+        daily, data_dir / "mfd_bank_shibor.csv", prefix="shibor", train_end=train_end
+    )
 
     return daily.astype(float)
 
@@ -144,7 +153,7 @@ def make_origin_features(daily, origin):
         for window in [7, 14, 28, 56]:
             tail = series.iloc[-window:]
             features[f"{target}_mean_{window}"] = np.log1p(tail.mean())
-            features[f"{target}_cv_{window}"] = (tail.std(ddof=0) / max(tail.mean(), 1.0))
+            features[f"{target}_cv_{window}"] = tail.std(ddof=0) / max(tail.mean(), 1.0)
 
         recent = series.iloc[-14:].mean()
         previous = series.iloc[-28:-14].mean()
@@ -163,13 +172,11 @@ def make_origin_features(daily, origin):
         features[f"{column}_mean_7"] = np.log1p(series.iloc[-7:].mean())
         features[f"{column}_mean_28"] = np.log1p(series.iloc[-28:].mean())
 
-    features["consume_share_28"] = (
-        history["consume"].iloc[-28:].sum()
-        / max(history["redeem"].iloc[-28:].sum(), 1.0)
+    features["consume_share_28"] = history["consume"].iloc[-28:].sum() / max(
+        history["redeem"].iloc[-28:].sum(), 1.0
     )
-    features["income_share_28"] = (
-        history["share"].iloc[-28:].sum()
-        / max(history["purchase"].iloc[-28:].sum(), 1.0)
+    features["income_share_28"] = history["share"].iloc[-28:].sum() / max(
+        history["purchase"].iloc[-28:].sum(), 1.0
     )
 
     for column in daily.columns:
@@ -202,24 +209,28 @@ def make_forecast_features(daily, origin):
     origin_features, baselines = make_origin_features(daily, origin)
 
     rows = []
-    future_dates = pd.date_range(origin + pd.Timedelta(days=1), periods=HORIZON, freq="D")
+    future_dates = pd.date_range(
+        origin + pd.Timedelta(days=1), periods=HORIZON, freq="D"
+    )
 
     for horizon, date in enumerate(future_dates, start=1):
         row = dict(origin_features)
 
-        row.update({
-            "horizon": horizon,
-            "target_weekday": date.dayofweek,
-            "target_month": date.month,
-            "target_day": date.day,
-            "target_is_weekend": int(date.dayofweek >= 5),
-            "target_is_workday": int(is_workday(date.date())),
-            "target_is_month_start": int(date.is_month_start),
-            "target_is_month_end": int(date.is_month_end),
-            "target_days_to_month_end": date.days_in_month - date.day,
-            "target_is_first_week": int(date.day <= 7),
-            "target_is_last_week": int(date.day > date.days_in_month - 7),
-        })
+        row.update(
+            {
+                "horizon": horizon,
+                "target_weekday": date.dayofweek,
+                "target_month": date.month,
+                "target_day": date.day,
+                "target_is_weekend": int(date.dayofweek >= 5),
+                "target_is_workday": int(is_workday(date.date())),
+                "target_is_month_start": int(date.is_month_start),
+                "target_is_month_end": int(date.is_month_end),
+                "target_days_to_month_end": date.days_in_month - date.day,
+                "target_is_first_week": int(date.day <= 7),
+                "target_is_last_week": int(date.day > date.days_in_month - 7),
+            }
+        )
 
         for target in TARGETS:
             row[f"{target}_baseline"] = baselines[date.dayofweek][target]
@@ -241,7 +252,7 @@ def make_training_samples(daily):
     label_blocks = []
     metadata_blocks = []
 
-    origins = daily.index[LOOKBACK - 1:len(daily) - HORIZON]
+    origins = daily.index[LOOKBACK - 1 : len(daily) - HORIZON]
 
     for origin in origins:
         features = make_forecast_features(daily, origin)
@@ -250,14 +261,17 @@ def make_training_samples(daily):
         labels = pd.DataFrame(index=features.index)
         for target in TARGETS:
             # 学习相对于周周期基线的对数修正。
-            labels[target] = (
-                np.log1p(truth[target])
-                - np.log1p(features[f"{target}_baseline"]))
+            labels[target] = np.log1p(truth[target]) - np.log1p(
+                features[f"{target}_baseline"]
+            )
 
-        metadata = pd.DataFrame({
-            "origin": origin,
-            "label_date": features.index,
-        }, index=features.index)
+        metadata = pd.DataFrame(
+            {
+                "origin": origin,
+                "label_date": features.index,
+            },
+            index=features.index,
+        )
 
         feature_blocks.append(features)
         label_blocks.append(labels)
